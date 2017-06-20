@@ -1,0 +1,576 @@
+---
+title: "Rumor Propagation"
+author: "Amy Ke 604167088"
+date: "March 7, 2016"
+output: html_document
+---
+
+```{r}
+###################  Rumor Propagation ####################
+###################  Original Tweets   ####################
+library(stringr)
+
+#Extract tweets with rumor content using keywords 'Gaddafi' and 'Venezuela'
+load("original_tweets.RData")
+vstr <- str_detect(original_tweets$Original_Text, pattern = '[V,v]enez')
+
+gstr <- str_detect(original_tweets$Original_Text, 
+        pattern = '[g,G,gh,Gh,Muammar,muammar]{1}ad{1,2}af{1,2}i')
+
+vdata <- original_tweets[which(vstr == T & gstr == T), ]
+
+#create new time variable for hourly time series
+library(lubridate)
+h <- hour(vdata$Time)
+
+#edit inconsistent single digit formats i.e. '09' instead of '9'
+new_h <- c()
+for (i in h){
+  if (i < 10){
+    p <- paste0(0,i)
+    new_h <- c(new_h, p)
+  }
+  
+  else {
+    new_h <- c(new_h, i)
+  }
+}
+
+newt <- paste(vdata$dates, new_h)
+vdata$newt <- as.POSIXct(newt, format = '%Y-%m-%d %H', tz = 'UTC')
+
+save(vdata, file="Vrumor_original.RData")
+
+#insert NA's into missing time values
+times <- seq(as.POSIXct("2011-02-15 08:00:00", tz = 'UTC'), 
+             as.POSIXct("2011-02-26 07:00:00", tz = 'UTC'),
+             by = 'hour')
+
+times <- as.character(times)
+t <- table(vdata$newt)
+
+ind <- times %in% names(t)
+begin <- rep(NA, length(times))
+names(begin) <- times
+begin[ind] <- t
+
+#create data frame of frequencies
+v_tw <- data.frame(cbind(c(1:length(begin)), unname(begin)))
+names(v_tw) <- c('time', 'tweets')
+ 
+#Examine Segments
+td <- table(vdata$newt)
+vtable <- td[order(td,decreasing = T)]
+
+#Plateau 1
+plat1 <- vdata[which(vdata$newt < as.POSIXct('2011-02-20 22:00:00', tz = 'UTC')),]
+
+#First peak: Feb 20, 2011, 10PM - 12AM UTC
+peak1a <- vdata[which(vdata$newt == as.POSIXct('2011-02-20 22:00:00', tz = 'UTC')),]
+peak1b <- vdata[which(vdata$newt == as.POSIXct('2011-02-20 23:00:00', tz = 'UTC')),]
+
+#First Peak Aftermath: Feb 21, 2011 12AM
+after_peak1 <-  vdata[which(vdata$newt == as.POSIXct('2011-02-21 00:00:00', tz = 'UTC')),]
+
+#Plateau 2
+plat2 <- vdata[which(vdata$newt > as.POSIXct('2011-02-21 00:00:00', tz = 'UTC') & vdata$newt < as.POSIXct('2011-02-21 16:00:00', tz = 'UTC')),]
+
+#Second peak: Feb 21, 2011, 4-7 PM UTC
+peak2a <- vdata[which(vdata$newt == as.POSIXct('2011-02-21 16:00:00', tz = 'UTC')),]
+peak2b <- vdata[which(vdata$newt == as.POSIXct('2011-02-21 17:00:00', tz = 'UTC')),]
+peak2c <- vdata[which(vdata$newt == as.POSIXct('2011-02-21 18:00:00', tz = 'UTC')),]
+
+#Second Peak Aftermath: Feb 21, 2011, 7PM UTC
+after_peak2 <- vdata[which(vdata$newt == as.POSIXct('2011-02-21 19:00:00', tz = 'UTC')),]
+
+#Plateau 3
+plat3 <- vdata[which(vdata$newt > as.POSIXct('2011-02-21 19:00:00', tz = 'UTC') & vdata$newt < as.POSIXct('2011-02-22 00:00:00', tz = 'UTC')),]
+
+#Third peak: Feb 22, 2011, 12AM
+peak3 <- vdata[which(vdata$newt == as.POSIXct('2011-02-22 00:00:00', tz = 'UTC')),]
+
+#Plateau 4
+plat4 <- vdata[which(vdata$newt > as.POSIXct('2011-02-22 00:00:00', tz = 'UTC') & vdata$newt < as.POSIXct('2011-02-22 16:00:00', tz = 'UTC')),]
+
+#Fourth Peak: Feb 22, 2011 4PM
+peak4 <- vdata[which(vdata$newt == as.POSIXct('2011-02-22 16:00:00', tz = 'UTC')),]
+
+#Plateau 5
+plat5 <- vdata[which(vdata$newt > as.POSIXct('2011-02-22 16:00:00', tz = 'UTC') & vdata$newt < as.POSIXct('2011-02-25 01:00:00', tz = 'UTC')),]
+
+#Fifth Peak: Feb 25, 2011 1AM
+peak5 <- vdata[which(vdata$newt == as.POSIXct('2011-02-25 01:00:00', tz = 'UTC')),]
+
+#Plateau 6
+plat6 <- vdata[which(vdata$newt > as.POSIXct('2011-02-25 01:00:00', tz = 'UTC')),]
+
+#Sample Text in each segment
+N <- nrow(vdata)
+Ni <- c()
+Ni[1] <- nrow(plat1)
+Ni[2] <- nrow(peak1a)
+Ni[3] <- nrow(peak1b)
+Ni[4] <- nrow(after_peak1)
+Ni[5] <- nrow(plat2)
+Ni[6] <- nrow(peak2a)
+Ni[7] <- nrow(peak2b)
+Ni[8] <- nrow(peak2c)
+Ni[9] <- nrow(after_peak2)
+Ni[10] <- nrow(plat3)
+Ni[11] <- nrow(peak3)
+Ni[12] <- nrow(plat4)
+Ni[13] <- nrow(peak4)
+Ni[14] <- nrow(plat5)
+Ni[15] <- nrow(peak5)
+Ni[16] <- nrow(plat6)
+
+#SRS sample size calculation for 0.1 Bound of Error
+a <- Ni/N
+D = (0.1^2)/4
+size <- function(a, phat=0.5){
+  n <- (Ni*phat*(1-phat))/((Ni-1)*D + phat*(1-phat))
+  n
+}
+
+samplesize <- ceiling(size(a))
+
+#Sample and categorize tweets
+#1 = tweets rumor as truth
+#2 = tweets rumor uncertainly i.e. "unconfirmed"
+#3 = unrelated
+#4 = discredits rumors, "truth"
+
+set.seed(N)
+plat1_rumors <- plat1$Original_Text[sample(nrow(plat1), samplesize[1], replace = F)]
+
+set.seed(N+1)
+peak1a_rumors <- peak1a$Original_Text[sample(nrow(peak1a), samplesize[2], replace=F)]
+
+set.seed(N+2)
+peak1b_rumors <- peak1b$Original_Text[sample(nrow(peak1b), samplesize[3], replace=F)]
+
+set.seed(N+3)
+afterpeak1_rumors <- after_peak1$Original_Text[sample(nrow(after_peak1), samplesize[4], replace=F)]
+
+set.seed(N+4)
+plat2_rumors <- plat2$Original_Text[sample(nrow(plat2), samplesize[5], replace=F)]
+
+set.seed(N+5)
+peak2a_rumors <- peak2a$Original_Text[sample(nrow(peak2a), samplesize[6], replace=F)]
+
+set.seed(N+6)
+peak2b_rumors <- peak2b$Original_Text[sample(nrow(peak2b), samplesize[7], replace=F)]
+
+set.seed(N+7)
+peak2c_rumors <- peak2c$Original_Text[sample(nrow(peak2c), samplesize[8], replace=F)]
+
+set.seed(N+8)
+afterpeak2_rumors <- after_peak2$Original_Text[sample(nrow(after_peak2), samplesize[9], replace=F)]
+
+set.seed(N+9)
+plat3_rumors <- plat3$Original_Text[sample(nrow(plat3), samplesize[10], replace=F)]
+
+set.seed(N+10)
+peak3_rumors <- peak3$Original_Text[sample(nrow(peak3), samplesize[11], replace=F)]
+
+set.seed(N+11)
+plat4_rumors <- plat4$Original_Text[sample(nrow(plat4), samplesize[12], replace=F)]
+
+set.seed(N+12)
+peak4_rumors <- peak4$Original_Text[sample(nrow(peak4), samplesize[13], replace=F)]
+
+set.seed(N+13)
+plat5_rumors <- plat5$Original_Text[sample(nrow(plat5), samplesize[14], replace=F)]
+
+set.seed(N+14)
+peak5_rumors <- peak5$Original_Text[sample(nrow(peak5), samplesize[15], replace=F)]
+
+set.seed(N+15)
+plat6_rumors <- plat6$Original_Text[sample(nrow(plat6), samplesize[16], replace=F)]
+
+
+###################  Retweets  ####################
+load("all_twitter_data.RData")
+
+retweets <- big_data[which(big_data$Type == 'Retweet'),]
+v <- str_detect(retweets$Text, pattern = '[V,v]enez')
+g <- str_detect(retweets$Text, 
+      pattern = '[g,G,gh,Gh,Muammar,muammar]{1}ad{1,2}af{1,2}i')
+
+rvdata <- retweets[which(v == T & g == T), ]
+
+#create new time variable
+library(lubridate)
+hr <- hour(rvdata$Time)
+
+new_h <- c()
+for (i in hr){
+  if (i < 10){
+    p <- paste0(0,i)
+    new_h <- c(new_h, p)
+  }
+  
+  else {
+    new_h <- c(new_h, i)
+  }
+}
+
+newrt <- paste(rvdata$dates, new_h)
+rvdata$newrt <- as.POSIXct(newrt, format = '%Y-%m-%d %H', tz = 'UTC')
+
+save(rvdata, file = "Vrumor_retweet.RData")
+
+###insert NA's into missing time values
+
+times2 <- seq(as.POSIXct("2011-02-15 08:00:00", tz = 'UTC'), 
+             as.POSIXct("2011-02-26 07:00:00", tz = 'UTC'),
+             by = 'hour')
+
+times2 <- as.character(times2)
+t2 <- table(rvdata$newrt)
+ind2 <- times2 %in% names(t2)
+
+begin_ret <- rep(NA, length(times2))
+names(begin_ret) <- times2
+begin_ret[ind2] <- t2
+
+
+#create data frame
+v_ret <- data.frame(cbind(c(1:length(begin_ret)), unname(begin_ret)))
+names(v_ret) <- c('time', 'tweets')
+
+#Key Event Dates 
+#Hague claims Gaddafi is en route to Venezuela - Reuters, Feb 21 4:30 PM
+feb21.5 <- which(names(begin) == '2011-02-21 16:00:00') + 0.5
+
+#Gaddafi dispells rumors, Feb 22, 12:00 AM
+feb22.0 <- which(names(begin) == '2011-02-22 00:00:00')
+
+
+########################### Tripoli protests ##################################
+
+#Extract Tripoli tweets using regular expressions
+b <- str_detect(original_tweets$Original_Text, pattern = '[T,t]ripoli')
+bb <- str_detect(original_tweets$Original_Text, pattern = 'police')
+
+ret <- big_data[which(big_data$Type == "Retweet"),]
+
+p <-str_detect(ret$Text, pattern = '[T,t]ripoli')
+pp <- str_detect(ret$Text, pattern = 'police')
+
+trip<- original_tweets[which(b == T & bb == T),]
+rtrip <- ret[which(p == T, pp == T), ]
+
+#create data frame for original tweets
+hour <- hour(trip$Time)
+new_h <- c()
+for (i in hour){
+  if (i < 10){
+    p <- paste0(0,i)
+    new_h <- c(new_h, p)
+  }
+  else {
+    new_h <- c(new_h, i)
+  }
+}
+
+dh <- paste(trip$dates, new_h)
+trip$dh <- as.POSIXct(dh, format = '%Y-%m-%d %H', tz = 'UTC')
+
+times <- seq(as.POSIXct("2011-02-15 07:00:00", tz = 'UTC'), 
+             as.POSIXct("2011-02-26 08:00:00", tz = 'UTC'),
+             by = 'hour')
+
+char_times <- as.character(times)
+t <- table(trip$dh)
+
+takens <- char_times %in% names(t)
+trip_tw <- rep(NA, length(char_times))
+names(trip_tw) <- char_times
+trip_tw[takens] <- t
+
+#create data frame for retweets
+hour <- hour(rtrip$Time)
+new_h <- c()
+for (i in hour){
+  if (i < 10){
+    p <- paste0(0,i)
+    new_h <- c(new_h, p)
+  }
+  else {
+    new_h <- c(new_h, i)
+  }
+}
+
+dh <- paste(rtrip$dates, new_h)
+rtrip$dh <- as.POSIXct(dh, format = '%Y-%m-%d %H', tz = 'UTC')
+
+times <- seq(as.POSIXct("2011-02-15 07:00:00", tz = 'UTC'), 
+             as.POSIXct("2011-02-26 08:00:00", tz = 'UTC'),
+             by = 'hour')
+
+char_times <- as.character(times)
+t <- table(rtrip$dh)
+takens <- char_times %in% names(t)
+rtrip_tw <- rep(NA, length(char_times))
+names(rtrip_tw) <- char_times
+rtrip_tw[takens] <- t
+
+#create data frames for time series plots
+p_tw <- data.frame(cbind(c(1:length(trip_tw)), unname(trip_tw)))
+names(p_tw) <- c('time', 'tweets')
+ 
+rp_ret <- data.frame(cbind(c(1:length(rtrip_tw)), unname(rtrip_tw)))
+names(rp_ret) <- c('time', 'tweets')
+
+
+
+####################### Analyze tweet rumor and truth proportions############ 
+
+#Import Rumor Samples from Original Tweets
+prop <- c()
+library(XLConnect)
+excel.file <- file.path("Rumor_samples.xlsx")
+
+importWorksheets <- function(filename, n) {
+    readWorksheetFromFile(filename, sheet=n, header=T)
+}
+
+n <- c(1:16)
+r <- importWorksheets(excel.file, n)
+
+
+#Create vectors of proportions of rumors (1 or 2) and truths (4)
+p12 <- c()
+p4 <- c()
+
+for(i in 1:16){
+  n <- nrow(r[[i]])
+  p12[i] <- (length(which(r[[i]][3] == 1) == T) + 
+               length(which(r[[i]][3] == 2) == T)) / n
+  p4[i] <- length(which(r[[i]][3] == 4) == T) / n
+}
+
+p <- c(p12, p4)
+
+#scale proportion data to time series
+t5 <- length(seq(as.POSIXct('2011-02-21 01:00:00', tz = 'UTC'),as.POSIXct('2011-02-21 15:00:00', tz = 'UTC'), by='hour'))
+
+t10 <- length(seq(as.POSIXct('2011-02-21 20:00:00', tz = 'UTC'),as.POSIXct('2011-02-21 23:00:00', tz = 'UTC'), by='hour'))
+
+t12 <- length(seq(as.POSIXct('2011-02-22 1:00:00', tz = 'UTC'),as.POSIXct('2011-02-22 15:00:00', tz = 'UTC'), by='hour'))
+
+t14 <- length(seq(as.POSIXct('2011-02-22 17:00:00', tz = 'UTC'),as.POSIXct('2011-02-25 00:00:00', tz = 'UTC'), by='hour'))
+
+t16 <- length(seq(as.POSIXct('2011-02-25 02:00:00', tz = 'UTC'),as.POSIXct('2011-02-26 07:00:00', tz = 'UTC'), by='hour'))
+
+index <- c()
+index <- rep(p12[1], 134)
+index <- c(index, p12[2])
+index <- c(index, p12[3])
+index <- c(index, p12[4])
+index <- c(index, rep(p12[5], t5))
+index <- c(index, p12[6])
+index <- c(index, p12[7])
+index <- c(index, p12[8])
+index <- c(index, p12[9])
+index <- c(index, rep(p12[10], t10))
+index <- c(index, p12[11])
+index <- c(index, rep(p12[12], t12))
+index <- c(index, p12[13])
+index <- c(index, rep(p12[14], t14))
+index <- c(index, p12[15])
+index <- c(index, rep(p12[16], t16))
+
+time <- 1:length(index)
+rums1 <- data.frame(time, index)
+
+index2 <- c()
+index2 <- rep(p4[1], 134)
+index2 <- c(index2, p4[2])
+index2 <- c(index2, p4[3])
+index2 <- c(index2, p4[4])
+index2 <- c(index2, rep(p4[5], t5))
+index2 <- c(index2, p4[6])
+index2 <- c(index2, p4[7])
+index2 <- c(index2, p4[8])
+index2 <- c(index2, p4[9])
+index2 <- c(index2, rep(p4[10], t10))
+index2 <- c(index2, p4[11])
+index2 <- c(index2, rep(p4[12], t12))
+index2 <- c(index2, p4[13])
+index2 <- c(index2, rep(p4[14], t14))
+index2 <- c(index2, p4[15])
+index2 <- c(index2, rep(p4[16], t16))
+
+rums2 <- data.frame(time, index2)
+
+#Repeat process for false information (1) vs. speculation (2)
+p1 <- c()
+p2 <- c()
+
+for(i in 1:16){
+  n <- nrow(r[[i]])
+  p1[i] <- length(which(r[[i]][3] == 1) == T) / n
+  p2[i] <- length(which(r[[i]][3] == 2) == T) / n
+}
+
+index3 <- c()
+index3 <- rep(p1[1], 134)
+index3 <- c(index3, p1[2])
+index3 <- c(index3, p1[3])
+index3 <- c(index3, p1[4])
+index3 <- c(index3, rep(p1[5], t5))
+index3 <- c(index3, p1[6])
+index3 <- c(index3, p1[7])
+index3 <- c(index3, p1[8])
+index3 <- c(index3, p1[9])
+index3 <- c(index3, rep(p1[10], t10))
+index3 <- c(index3, p1[11])
+index3 <- c(index3, rep(p1[12], t12))
+index3 <- c(index3, p1[13])
+index3 <- c(index3, rep(p1[14], t14))
+index3 <- c(index3, p1[15])
+index3 <- c(index3, rep(p1[16], t16))
+
+rum3 <- data.frame(time, index3)
+
+index4 <- c()
+index4 <- rep(p2[1], 134)
+index4 <- c(index4, p2[2])
+index4 <- c(index4, p2[3])
+index4 <- c(index4, p2[4])
+index4 <- c(index4, rep(p2[5], t5))
+index4 <- c(index4, p2[6])
+index4 <- c(index4, p2[7])
+index4 <- c(index4, p2[8])
+index4 <- c(index4, p2[9])
+index4 <- c(index4, rep(p2[10], t10))
+index4 <- c(index4, p2[11])
+index4 <- c(index4, rep(p2[12], t12))
+index4 <- c(index4, p2[13])
+index4 <- c(index4, rep(p2[14], t14))
+index4 <- c(index4, p2[15])
+index4 <- c(index4, rep(p2[16], t16))
+
+rum4 <- data.frame(time, index4)
+
+#Repeat process for unrelated tweets (3)
+index5 <- c()
+index5 <- rep(p3[1], 134)
+index5 <- c(index5, p3[2])
+index5 <- c(index5, p3[3])
+index5 <- c(index5, p3[4])
+index5 <- c(index5, rep(p3[5], t5))
+index5 <- c(index5, p3[6])
+index5 <- c(index5, p3[7])
+index5 <- c(index5, p3[8])
+index5 <- c(index5, p3[9])
+index5 <- c(index5, rep(p3[10], t10))
+index5 <- c(index5, p3[11])
+index5 <- c(index5, rep(p3[12], t12))
+index5 <- c(index5, p3[13])
+index5 <- c(index5, rep(p3[14], t14))
+index5 <- c(index5, p3[15])
+index5 <- c(index5, rep(p3[16], t16))
+
+rum5 <- data.frame(time, index5)
+
+##################### Visualizations ##################################
+
+#Create list of time by day
+days <- seq(as.POSIXct("2011-02-16", tz = 'UTC'), 
+             as.POSIXct("2011-02-26", tz = 'UTC'),
+             by = 'day')
+days <- substr(as.character(days),6,10)
+24*(1:length(days))-7
+
+library(ggplot2)
+
+#Venezuela Time Series
+g.day <- ggplot(NULL, aes(x=time, y=tweets)) + 
+  geom_line(data=v_tw, aes(colour="Original Tweets"), size=1) + 
+  geom_line(data=v_ret,aes(colour="Retweets"),size=1,linetype=11) + 
+  scale_colour_manual("", values=c("black", "gold2")) + 
+  labs(x="", y="Frequency of Tweets", title = "Venezuela Rumor Propagation Through Time") + 
+  theme_bw() + scale_x_continuous(limits=c(1,264), breaks=24*(1:length(days))-7, labels=days) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position=c(0.8,0.6))
+g.day
+
+#Venezuela Time Series Zoom
+g.day2 <- ggplot(NULL, aes(x=time, y=tweets)) + 
+  geom_line(data=v_tw, aes(colour="Original Tweets"), size=1) + 
+  geom_line(data=v_ret,aes(colour="Retweets"),size=1,linetype=11) + 
+  scale_colour_manual("", values=c("black", "gold2")) + 
+  labs(x="", y="Frequency of Tweets", title = "Venezuela Rumor Propagation Through Time") + 
+  theme_bw() + scale_x_continuous(limits=c(100,264), breaks=24*(1:length(days))-7, labels=days) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position=c(0.8,0.6))
+g.day2
+
+#Tripoli Time Series
+t.time <- ggplot(NULL, aes(x=time, y=tweets)) + 
+  geom_line(data=p_tw, aes(colour="Original Tweets"), size=1) + 
+  geom_line(data=rp_ret,aes(colour="Retweets"),size=1,linetype=11) + 
+  scale_colour_manual("", values=c("black", "gold2")) + 
+  labs(x="", y="Frequency of Tweets", title = "Tripoli Protests Through Time") + 
+  theme_bw() + scale_x_continuous(limits=c(1,264), breaks=24*(1:length(days))-7, labels=days) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position=c(0.2,0.6))
+t.time
+
+#Venezuela Retweet Ratio
+rplot <- ggplot(NULL, aes(x=y, y=ratio)) + 
+  geom_line(data=r, size=1, color = "cyan4") + 
+  labs(x="", y="Ratio", title = "Ratio or Retweets to Original Tweets") + 
+  theme_bw() + scale_x_continuous(limits=c(1,264), breaks=24*(1:length(days))-7, labels=days) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+rplot
+
+#Tripoli Retweet Ratio
+rplot2 <- ggplot(NULL, aes(x=z, y=ratio2)) + 
+  geom_line(data=r2, size=1, color = "cyan4") + 
+  labs(x="", y="Ratio", title = "Ratio of Retweets to Original Tweets") + 
+  theme_bw() + scale_x_continuous(limits=c(1,264), breaks=24*(1:length(days))-7, labels=days) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+rplot2
+
+#Proportions
+p.plot <- ggplot() + 
+  geom_line(data=rums1, aes(x=time, y=index, col = "Rumors"), size=1) + 
+  geom_line(data=rums2, aes(x=time, y=index2, col = "Truths"),size=1) +
+  labs(x="", y="Proportion of Original Tweets", title = "Credibility") + 
+  theme_bw() + scale_x_continuous(limits=c(100,264), breaks=24*(1:length(days))-7, labels=days) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(legend.title = element_blank(), legend.position=c(0.8,0.6)) + ylim(c(0,1))
+p.plot
+
+#Unrelated Tweets
+p.plot3 <- ggplot() + 
+  geom_line(data=rum5, aes(x=time, y=index5, col = "Unrelated"), size=1) + 
+  labs(x="", y="Proportion of Original Tweets", title = "") + 
+  theme_bw() + scale_x_continuous(limits=c(100,264), breaks=24*(1:length(days))-7, labels=days) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(legend.title = element_blank(), legend.position=c(0.8,0.4)) + ylim(c(0,1)) +
+  ggtitle("Unrelated Tweets")
+p.plot3
+
+#plot major events
+p.plot + geom_vline(xintercept=feb22.0, col='purple', linetype=8) + 
+  geom_vline(xintercept=feb21.5, col='purple', linetype=8) + 
+  ggtitle("Proportional Breakdown of Tweet Categories")
+
+g.day2 + geom_vline(xintercept=feb22.0, col='purple', linetype=8) + 
+  geom_vline(xintercept=feb21.5, col='purple', linetype=8)
+
+
+#1 vs. 2
+p.plot2 <- ggplot() + 
+  geom_line(data=rum3, aes(x=time, y=index3, col = "False Information")) + 
+  geom_line(data=rum4, aes(x=time, y=index4, col = "Speculation")) +
+  labs(x="", y="Proportion of Original Tweets", title = "Breakdown of Rumors") + 
+  theme_bw() + scale_x_continuous(limits=c(100,264), breaks=24*(1:length(days))-7, labels=days) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(legend.title = element_blank(), legend.position=c(0.8,0.6)) + scale_colour_manual("", values=c("firebrick4", "darkorange1"))
+p.plot2
+p.plot2 + geom_vline(xintercept=feb22.0, col='purple', linetype=8) + 
+  geom_vline(xintercept=feb21.5, col='purple', linetype=8)
+```
